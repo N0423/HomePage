@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>お絵描きアプリ</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overscroll-behavior: none;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .tool-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .color-picker {
+            width: 44px;
+            height: 44px;
+            padding: 0;
+        }
+
+        .size-picker {
+            width: 150px;
+            height: 44px;
+            margin: 0;
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        canvas {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            touch-action: none;
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-size: 16px;
+            height: 44px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #clearButton {
+            background-color: #f44336;
+        }
+
+        #clearButton:hover {
+            background-color: #da190b;
+        }
+
+        #eraserButton {
+            background-color: #2196F3;
+        }
+
+        #eraserButton:hover {
+            background-color: #1976D2;
+        }
+
+        .size-label {
+            font-size: 16px;
+            min-width: 50px;
+        }
+
+        .table-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: none;
+        }
+
+        .table-dialog input {
+            width: 60px;
+            padding: 8px;
+            margin: 5px;
+        }
+
+        .table-dialog button {
+            margin: 10px 5px;
+        }
+
+        .tool-button {
+            background-color: #9c27b0;
+        }
+
+        .tool-button:hover {
+            background-color: #7b1fa2;
+        }
+
+        .tool-button.active {
+            background-color: #ff9800;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="tool-group">
+            <input type="color" id="colorPicker" class="color-picker" value="#000000">
+            <input type="range" id="sizePicker" class="size-picker" min="1" max="50" value="5">
+            <span id="sizeValue" class="size-label">5px</span>
+        </div>
+        <div class="tool-group">
+            <button id="penButton" class="tool-button active">ペン</button>
+            <button id="tableButton" class="tool-button">表</button>
+            <button id="eraserButton">消しゴム</button>
+        </div>
+        <div class="tool-group">
+            <button id="clearButton">全消去</button>
+            <button id="saveButton">保存</button>
+        </div>
+    </div>
+    <div class="canvas-container">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div id="tableDialog" class="table-dialog">
+        <div>
+            <label>行数: <input type="number" id="rowsInput" value="3" min="1" max="10"></label>
+            <label>列数: <input type="number" id="colsInput" value="3" min="1" max="10"></label>
+        </div>
+        <div>
+            <label>セルの幅: <input type="number" id="cellWidthInput" value="100" min="50" max="200"></label>
+            <label>セルの高さ: <input type="number" id="cellHeightInput" value="50" min="30" max="100"></label>
+        </div>
+        <button id="createTableButton">表を作成</button>
+        <button id="cancelTableButton">キャンセル</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const sizePicker = document.getElementById('sizePicker');
+        const sizeValue = document.getElementById('sizeValue');
+        const clearButton = document.getElementById('clearButton');
+        const eraserButton = document.getElementById('eraserButton');
+        const saveButton = document.getElementById('saveButton');
+        const penButton = document.getElementById('penButton');
+        const tableButton = document.getElementById('tableButton');
+        const tableDialog = document.getElementById('tableDialog');
+        const container = document.querySelector('.canvas-container');
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let isEraser = false;
+        let currentTool = 'pen'; // pen, table, eraser
+        let drawingHistory = [];
+
+        function initializeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+        }
+
+        function handlePointerDown(e) {
+            if (e.pointerType === 'pen') {
+                isDrawing = true;
+                [lastX, lastY] = getPointerPos(e);
+                
+                if (currentTool === 'table') {
+                    showTableDialog();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(lastX, lastY);
+                }
+            }
+        }
+
+        function handlePointerMove(e) {
+            if (!isDrawing || e.pointerType !== 'pen' || currentTool === 'table') return;
+
+            const [x, y] = getPointerPos(e);
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = isEraser ? '#ffffff' : colorPicker.value;
+            ctx.lineWidth = sizePicker.value; // 筆圧を無効化
+            ctx.stroke();
+            [lastX, lastY] = [x, y];
+        }
+
+        function handlePointerUp(e) {
+            if (e.pointerType === 'pen') {
+                isDrawing = false;
+                ctx.closePath();
+                saveDrawingState();
+            }
+        }
+
+        function drawTable(startX, startY, rows, cols, cellWidth, cellHeight) {
+            ctx.strokeStyle = colorPicker.value;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            // 横線を描画
+            for (let i = 0; i <= rows; i++) {
+                ctx.moveTo(startX, startY + i * cellHeight);
+                ctx.lineTo(startX + cols * cellWidth, startY + i * cellHeight);
+            }
+
+            // 縦線を描画
+            for (let i = 0; i <= cols; i++) {
+                ctx.moveTo(startX + i * cellWidth, startY);
+                ctx.lineTo(startX + i * cellWidth, startY + rows * cellHeight);
+            }
+
+            ctx.stroke();
+            saveDrawingState();
+        }
+
+        function showTableDialog() {
+            tableDialog.style.display = 'block';
+        }
+
+        document.getElementById('createTableButton').addEventListener('click', () => {
+            const rows = parseInt(document.getElementById('rowsInput').value);
+            const cols = parseInt(document.getElementById('colsInput').value);
+            const cellWidth = parseInt(document.getElementById('cellWidthInput').value);
+            const cellHeight = parseInt(document.getElementById('cellHeightInput').value);
+            
+            drawTable(lastX, lastY, rows, cols, cellWidth, cellHeight);
+            tableDialog.style.display = 'none';
+        });
+
+        document.getElementById('cancelTableButton').addEventListener('click', () => {
+            tableDialog.style.display = 'none';
+        });
+
+        function getPointerPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return [
+                e.clientX - rect.left,
+                e.clientY - rect.top
+            ];
+        }
+
+        function updateSize() {
+            sizeValue.textContent = sizePicker.value + 'px';
+        }
+
+        function clearCanvas() {
+            if (confirm('本当に全て消去しますか？')) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                saveDrawingState();
+            }
+        }
+
+        function toggleEraser() {
+            isEraser = !isEraser;
+            currentTool = isEraser ? 'eraser' : 'pen';
+            updateToolButtons();
+        }
+
+        function saveDrawing() {
+            const link = document.createElement('a');
+            link.download = 'my-drawing.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        function saveDrawingState() {
+            const imageData = canvas.toDataURL();
+            drawingHistory.push(imageData);
+            if (drawingHistory.length > 10) {
+                drawingHistory.shift();
+            }
+        }
+
+        function restoreLastDrawingState() {
+            if (drawingHistory.length > 0) {
+                const img = new Image();
+                img.onload = function() {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                };
+                img.src = drawingHistory[drawingHistory.length - 1];
+            }
+        }
+
+        function updateToolButtons() {
+            penButton.classList.toggle('active', currentTool === 'pen');
+            tableButton.classList.toggle('active', currentTool === 'table');
+            eraserButton.style.backgroundColor = isEraser ? '#ff9800' : '#2196F3';
+        }
+
+        // ツール切り替えの処理
+        penButton.addEventListener('click', () => {
+            currentTool = 'pen';
+            isEraser = false;
+            updateToolButtons();
+        });
+
+        tableButton.addEventListener('click', () => {
+            currentTool = 'table';
+            isEraser = false;
+            updateToolButtons();
+        });
+
+        // イベントリスナーの設定
+        canvas.addEventListener('pointerdown', handlePointerDown);
+        canvas.addEventListener('pointermove', handlePointerMove);
+        canvas.addEventListener('pointerup', handlePointerUp);
+        canvas.addEventListener('pointerout', handlePointerUp);
+        sizePicker.addEventListener('input', updateSize);
+        clearButton.addEventListener('click', clearCanvas);
+        eraserButton.addEventListener('click', toggleEraser);
+        saveButton.addEventListener('click', saveDrawing);
+
+        // リサイズ処理
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                tempCtx.drawImage(canvas, 0, 0);
+                
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+                
+                ctx.drawImage(tempCanvas, 0, 0);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+            }, 250);
+        });
+
+        // スクロールとズームを防止
+        document.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 1) e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('gesturestart', (e) => {
+            e.preventDefault();
+        });
+
+        // 初期化
+        initializeCanvas();
+    </script>
+</body>
+</html>
