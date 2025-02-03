@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>お絵描きアプリ</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .color-picker {
+            margin-right: 10px;
+        }
+
+        .size-picker {
+            width: 100px;
+            margin-right: 10px;
+        }
+
+        canvas {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            cursor: crosshair;
+        }
+
+        button {
+            padding: 8px 15px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #clearButton {
+            background-color: #f44336;
+        }
+
+        #clearButton:hover {
+            background-color: #da190b;
+        }
+
+        #eraserButton {
+            background-color: #2196F3;
+        }
+
+        #eraserButton:hover {
+            background-color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <input type="color" id="colorPicker" class="color-picker" value="#000000">
+        <input type="range" id="sizePicker" class="size-picker" min="1" max="50" value="5">
+        <span id="sizeValue">5px</span>
+        <button id="eraserButton">消しゴム</button>
+        <button id="clearButton">全消去</button>
+        <button id="saveButton">保存</button>
+    </div>
+    <canvas id="canvas" width="800" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const sizePicker = document.getElementById('sizePicker');
+        const sizeValue = document.getElementById('sizeValue');
+        const clearButton = document.getElementById('clearButton');
+        const eraserButton = document.getElementById('eraserButton');
+        const saveButton = document.getElementById('saveButton');
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let isEraser = false;
+
+        // 描画の初期設定
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // イベントリスナーの設定
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        sizePicker.addEventListener('input', updateSize);
+        clearButton.addEventListener('click', clearCanvas);
+        eraserButton.addEventListener('click', toggleEraser);
+        saveButton.addEventListener('click', saveDrawing);
+
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = getMousePos(e);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+
+            const [x, y] = getMousePos(e);
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = isEraser ? '#ffffff' : colorPicker.value;
+            ctx.lineWidth = sizePicker.value;
+            ctx.stroke();
+            [lastX, lastY] = [x, y];
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return [
+                e.clientX - rect.left,
+                e.clientY - rect.top
+            ];
+        }
+
+        function updateSize() {
+            sizeValue.textContent = sizePicker.value + 'px';
+        }
+
+        function clearCanvas() {
+            if (confirm('本当に全て消去しますか？')) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function toggleEraser() {
+            isEraser = !isEraser;
+            eraserButton.style.backgroundColor = isEraser ? '#ff9800' : '#2196F3';
+            eraserButton.textContent = isEraser ? '鉛筆に戻る' : '消しゴム';
+        }
+
+        function saveDrawing() {
+            const link = document.createElement('a');
+            link.download = 'my-drawing.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        // タッチデバイスのサポート
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            const mouseEvent = new MouseEvent('mouseup', {});
+            canvas.dispatchEvent(mouseEvent);
+        });
+    </script>
+</body>
+</html>
