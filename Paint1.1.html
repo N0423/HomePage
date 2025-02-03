@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Apple Pencil お絵描きアプリ</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overscroll-behavior: none;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .color-picker {
+            width: 44px;
+            height: 44px;
+            padding: 0;
+        }
+
+        .size-picker {
+            width: 150px;
+            height: 44px;
+            margin: 0;
+        }
+
+        canvas {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            touch-action: none;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-size: 16px;
+            height: 44px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #clearButton {
+            background-color: #f44336;
+        }
+
+        #clearButton:hover {
+            background-color: #da190b;
+        }
+
+        #eraserButton {
+            background-color: #2196F3;
+        }
+
+        #eraserButton:hover {
+            background-color: #1976D2;
+        }
+
+        .size-label {
+            font-size: 16px;
+            min-width: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <input type="color" id="colorPicker" class="color-picker" value="#000000">
+        <input type="range" id="sizePicker" class="size-picker" min="1" max="50" value="5">
+        <span id="sizeValue" class="size-label">5px</span>
+        <button id="eraserButton">消しゴム</button>
+        <button id="clearButton">全消去</button>
+        <button id="saveButton">保存</button>
+    </div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const sizePicker = document.getElementById('sizePicker');
+        const sizeValue = document.getElementById('sizeValue');
+        const clearButton = document.getElementById('clearButton');
+        const eraserButton = document.getElementById('eraserButton');
+        const saveButton = document.getElementById('saveButton');
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let isEraser = false;
+        let pressure = 1.0;
+
+        // キャンバスサイズをウィンドウに合わせる
+        function resizeCanvas() {
+            const controls = document.querySelector('.controls');
+            canvas.width = window.innerWidth - 40; // パディングの分を引く
+            canvas.height = window.innerHeight - controls.offsetHeight - 60; // コントロールの高さとパディングを引く
+        }
+
+        // 初期設定
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 描画の初期設定
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Apple Pencilのみの描画を制御する関数
+        function handlePointerDown(e) {
+            // Apple Pencilの場合のみ描画を許可
+            if (e.pointerType === 'pen') {
+                isDrawing = true;
+                pressure = e.pressure;
+                [lastX, lastY] = getPointerPos(e);
+            }
+        }
+
+        function handlePointerMove(e) {
+            if (!isDrawing || e.pointerType !== 'pen') return;
+
+            const [x, y] = getPointerPos(e);
+            pressure = e.pressure || pressure; // プレッシャーの更新
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = isEraser ? '#ffffff' : colorPicker.value;
+            ctx.lineWidth = sizePicker.value * pressure; // プレッシャーに応じて線の太さを調整
+            ctx.stroke();
+            [lastX, lastY] = [x, y];
+        }
+
+        function handlePointerUp(e) {
+            if (e.pointerType === 'pen') {
+                isDrawing = false;
+            }
+        }
+
+        function getPointerPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return [
+                e.clientX - rect.left,
+                e.clientY - rect.top
+            ];
+        }
+
+        function updateSize() {
+            sizeValue.textContent = sizePicker.value + 'px';
+        }
+
+        function clearCanvas() {
+            if (confirm('本当に全て消去しますか？')) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function toggleEraser() {
+            isEraser = !isEraser;
+            eraserButton.style.backgroundColor = isEraser ? '#ff9800' : '#2196F3';
+            eraserButton.textContent = isEraser ? '鉛筆に戻る' : '消しゴム';
+        }
+
+        function saveDrawing() {
+            const link = document.createElement('a');
+            link.download = 'my-drawing.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        // イベントリスナーの設定
+        canvas.addEventListener('pointerdown', handlePointerDown);
+        canvas.addEventListener('pointermove', handlePointerMove);
+        canvas.addEventListener('pointerup', handlePointerUp);
+        canvas.addEventListener('pointerout', handlePointerUp);
+        sizePicker.addEventListener('input', updateSize);
+        clearButton.addEventListener('click', clearCanvas);
+        eraserButton.addEventListener('click', toggleEraser);
+        saveButton.addEventListener('click', saveDrawing);
+
+        // スクロールとズームを防止
+        document.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 1) e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('gesturestart', (e) => {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>
